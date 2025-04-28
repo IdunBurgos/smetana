@@ -25,13 +25,13 @@ def extract_id_from_filepath(filepath):
     return organism_id
 
 
-def build_cache(models, flavor=None):
+def build_cache(models, flavor=None,exchange_detection=None): # NEW
     ids = [extract_id_from_filepath(model) for model in models]
 
     if not flavor:
         flavor = 'fbc2'
 
-    load_args = {'flavor': flavor}
+    load_args = {'flavor': flavor,'exchange_detection':exchange_detection} #changed here
 
     def post_process(model):
         if 'R_ATPM' in model.reactions:
@@ -40,7 +40,7 @@ def build_cache(models, flavor=None):
     return ModelCache(ids, models, load_args=load_args, post_processing=post_process)
 
 
-def load_communities(models, communities, other, flavor):
+def load_communities(models, communities, other, flavor,exchange_detection=None): ## change here
     if len(models) == 1 and '*' in models[0]:
         pattern = models[0]
         models = glob.glob(pattern)
@@ -53,7 +53,7 @@ def load_communities(models, communities, other, flavor):
     else:
         other_models = set()
 
-    model_cache = build_cache(models, flavor)
+    model_cache = build_cache(models, flavor,exchange_detection) # changed here
 
     if communities is not None:
         df = pd.read_csv(communities, sep='\t', header=None, dtype=str)
@@ -105,11 +105,14 @@ def load_media(media, mediadb, exclude, other):
     return media, media_db, excluded_mets, other_mets
 
 
-def define_environment(medium, media_db, community, mode, aerobic, verbose, min_mol_weight, use_lp):
+def define_environment(medium, media_db, community, mode, aerobic, verbose, min_mol_weight, use_lp,agora_model):
     max_uptake = 10.0 * len(community.organisms)
 
     if medium:
-        fmt_func = lambda x: "R_EX_M_{}_e_pool".format(x)
+        if agora_model:
+            fmt_func = lambda x: "R_EX_M_{}__91__e__93___pool".format(x)
+        else:
+            fmt_func = lambda x: "R_EX_M_{}_e_pool".format(x)
         env = Environment.from_compounds(media_db[medium], fmt_func=fmt_func, max_uptake=max_uptake)
         medium_id = medium
     elif mode == "global":
@@ -117,14 +120,21 @@ def define_environment(medium, media_db, community, mode, aerobic, verbose, min_
         medium_id = 'complete'
 
         if aerobic is not None and aerobic:
-            env["R_EX_M_o2_e_pool"] = (-max_uptake, inf)
+            if agora_model:
+                env["R_EX_M_o2__91__e__93___pool"] = (-max_uptake, inf)
+            else:
+                env["R_EX_M_o2_e_pool"] = (-max_uptake, inf)
 
         if aerobic is not None and not aerobic:
-            env["R_EX_M_o2_e_pool"] = (0, inf)
+            
+            if agora_model:
+                env["R_EX_M_o2__91__e__93___pool"] = (0, inf)       
+            else:
+                env["R_EX_M_o2_e_pool"] = (0, inf)
 
     else:
         env = minimal_environment(community, aerobic, verbose=verbose, min_mol_weight=min_mol_weight,
-                                  use_lp=use_lp, max_uptake=max_uptake)
+                                  use_lp=use_lp, max_uptake=max_uptake,agora_model=agora_model)
         medium_id = "minimal"
 
     return medium_id, env
@@ -221,7 +231,7 @@ def run_detailed(comm_id, community, medium_id, excluded_mets, env, verbose, min
 
 
 def run_abiotic(comm_id, sense, community, medium_id, excluded_mets, env, verbose, min_mol_weight, other_mets, n, p,
-                ignore_coupling):
+                ignore_coupling,agora_model):
 
     medium = set(env.get_compounds(fmt_func=lambda x: x[7:-7]))
     max_uptake = 10.0 * len(community.organisms)
@@ -234,7 +244,11 @@ def run_abiotic(comm_id, sense, community, medium_id, excluded_mets, env, verbos
         n_extra_cpds = 2*p
         modified = sample(modified, n_extra_cpds)
         medium = medium | set(modified)
-        env = Environment.from_compounds(medium, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",  max_uptake=max_uptake)
+        
+        if agora_model:
+            env = Environment.from_compounds(medium, fmt_func=lambda x: f"R_EX_M_{x}__91__e__93___pool",  max_uptake=max_uptake)
+        else:
+            env = Environment.from_compounds(medium, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",  max_uptake=max_uptake)
 
     if len(modified) < p:
         raise RuntimeError("Insufficient compounds ({}) to perform ({}) perturbations.".format(len(modified), p))
@@ -265,8 +279,11 @@ def run_abiotic(comm_id, sense, community, medium_id, excluded_mets, env, verbos
                 new_compounds = medium - set(sample(modified, p))
             new_id = "{}_{}".format(medium_id, i + 1)
 
-        new_env = Environment.from_compounds(new_compounds, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",
-                                             max_uptake=max_uptake)
+        if agora_model:
+            new_env = Environment.from_compounds(new_compounds, fmt_func=lambda x: f"R_EX_M_{x}__91__e__93___pool",  max_uptake=max_uptake)
+        else:
+            new_env = Environment.from_compounds(new_compounds, fmt_func=lambda x: f"R_EX_M_{x}_e_pool",  max_uptake=max_uptake)
+        
         entries = run_detailed(comm_id, community, new_id, excluded_mets, new_env, False, min_mol_weight,
                                ignore_coupling)
         data.extend(entries)
@@ -336,10 +353,10 @@ def export_results(mode, output, data, debug_data, zeros):
 
 def main(models, communities=None, mode=None, output=None, flavor=None, media=None, mediadb=None, aerobic=None,
          zeros=False,verbose=False, min_mol_weight=False, use_lp=False, exclude=None, debug=False,
-         other=None, n=1, p=1, ignore_coupling=False):
+         other=None, n=1, p=1, ignore_coupling=False,exchange_detection=None,agora_model=None): #Changed
 
     other_models = other if mode == "biotic" else None
-    model_cache, comm_dict, other_models = load_communities(models, communities, other_models, flavor)
+    model_cache, comm_dict, other_models = load_communities(models, communities, other_models, flavor,exchange_detection=exchange_detection)
 
     other_mets = other if mode == "abiotic" or mode == 'abiotic-rm' else None
     media, media_db, excluded_mets, other_mets = load_media(media, mediadb, exclude, other_mets)
@@ -357,7 +374,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
         for medium in media:
 
-            medium_id, env = define_environment(medium, media_db, community, mode, aerobic, verbose, min_mol_weight, use_lp)
+            medium_id, env = define_environment(medium, media_db, community, mode, aerobic, verbose, min_mol_weight, use_lp,agora_model)
 
             if mode == "global":
                 entries, debug_entries = run_global(comm_id, community, organisms, medium_id, excluded_mets, env,
@@ -373,7 +390,7 @@ def main(models, communities=None, mode=None, output=None, flavor=None, media=No
 
             if mode == "abiotic-rm":
                 entries = run_abiotic(comm_id, 'rm', community, medium_id, excluded_mets, env, verbose, min_mol_weight,
-                                       other_mets, n, p, ignore_coupling)
+                                       other_mets, n, p, ignore_coupling,agora_model)
 
             if mode == "biotic":
                 entries = run_biotic(comm_id, community, medium_id, excluded_mets, env, verbose, min_mol_weight,

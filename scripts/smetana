@@ -69,6 +69,10 @@ if __name__ == '__main__':
     parser.add_argument('--exclude', help="List of compounds to exclude from calculations (e.g.: inorganic compounds).")
     parser.add_argument('--debug', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--no-coupling', action='store_true', help="Don't compute species coupling scores.")
+    parser.add_argument('--exchange-detection', dest="exchange_detection", type=str, default=False, help="Add regex for exchange reactions.")
+    parser.add_argument('--agora-model', dest="agora_model",action='store_true', default=False, help="The models provided are AGORA models")
+
+
 
     args = parser.parse_args()
 
@@ -119,6 +123,8 @@ if __name__ == '__main__':
         p=args.p,
         n=args.n,
         ignore_coupling=args.no_coupling,
+        exchange_detection=args.exchange_detection,
+        agora_model=args.agora_model 
     )
 
 

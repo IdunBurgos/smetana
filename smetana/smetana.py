@@ -372,19 +372,27 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
 
 
 def minimal_environment(community, aerobic=None, min_mol_weight=False, min_growth=0.1, max_uptake=10,
-                        validate=False, verbose=True, use_lp=False):
+                        validate=False, verbose=True, use_lp=False,agora_model=False):
 
     exch_reactions = set(community.merged.get_exchange_reactions())
-
-    exch_reactions -= {"R_EX_M_h2o_e_pool"}
-    community.merged.set_flux_bounds("R_EX_M_h2o_e_pool", -inf, inf)
+    
+    if agora_model:
+        h2o = "R_EX_M_h2o__91__e__93___pool"
+        o2 = "R_EX_M_o2__91__e__93___pool"
+    else:
+        h2o = "R_EX_M_h2o_e_pool"
+        o2 = "R_EX_M_o2_e_pool"
+        
+    
+    exch_reactions -= {h2o}
+    community.merged.set_flux_bounds(h2o, -inf, inf)
 
     if aerobic is not None:
-        exch_reactions -= {"R_EX_M_o2_e_pool"}
+        exch_reactions -= {o2}
         if aerobic:
-            community.merged.set_flux_bounds("R_EX_M_o2_e_pool", -max_uptake, inf)
+            community.merged.set_flux_bounds(o2, -max_uptake, inf)
         else:
-            community.merged.set_flux_bounds("R_EX_M_o2_e_pool", 0, inf)
+            community.merged.set_flux_bounds(o2, 0, inf)
 
     ex_rxns, sol = minimal_medium(community.merged, exchange_reactions=exch_reactions,
         min_mass_weight=min_mol_weight, min_growth=min_growth, milp=(not use_lp),
@@ -396,7 +404,7 @@ def minimal_environment(community, aerobic=None, min_mol_weight=False, min_growt
         return None
     else:
         if aerobic is not None and aerobic:
-            ex_rxns |= {"R_EX_M_o2_e_pool"}
+            ex_rxns |= {o2}
         env = Environment.from_reactions(ex_rxns, max_uptake=max_uptake)
-        env["R_EX_M_h2o_e_pool"] = (-inf, inf)
+        env[h2o] = (-inf, inf)
         return env
