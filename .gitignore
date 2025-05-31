@@ -8,3 +8,4 @@ venv/*
 .eggs/*
 .tox/*
 .ipynb_checkpoints/
+.DS_Store
