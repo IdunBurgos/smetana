@@ -1,6 +1,8 @@
 from reframed import minimal_medium, solver_instance, Environment
 from reframed.solvers.solver import VarType
 from reframed.solvers.solution import Status
+from reframed.solvers.solver import Parameter
+
 
 from collections import Counter
 from itertools import combinations, chain
@@ -8,7 +10,8 @@ from warnings import warn
 from math import isinf, inf
 
 
-def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-6, use_pool=False):
+def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbose=True, abstol=1e-9, use_pool=False):
+    # originally abstol=1e-6
     """
     Calculate frequency of community species dependency on each other
 
@@ -35,7 +38,8 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
         community.merged.reactions[b].lb = 0
 
     solver = solver_instance(community.merged)
-
+    solver.set_parameter(Parameter.FEASIBILITY_TOL,1e-9) # Changed this to get more accurate solutions
+    
     for org_id in community.organisms:
         org_var = 'y_{}'.format(org_id)
         solver.add_variable(org_var, 0, 1, vartype=VarType.BINARY)
@@ -110,7 +114,8 @@ def sc_score(community, environment=None, min_growth=0.1, n_solutions=100, verbo
 
 
 def mu_score(community, environment=None, min_mol_weight=False, min_growth=0.1, max_uptake=10.0,
-             abstol=1e-6, validate=False, n_solutions=100, pool_gap=0.5, verbose=True):
+             abstol=1e-9, validate=False, n_solutions=100, pool_gap=0.5, verbose=True): 
+    # originally abstol=1e-6
     """
     Calculate frequency of metabolite requirement for species growth
 
@@ -137,6 +142,8 @@ def mu_score(community, environment=None, min_mol_weight=False, min_growth=0.1, 
     max_uptake = max_uptake * len(community.organisms)
     scores = {}
     solver = solver_instance(community.merged)
+    solver.set_parameter(Parameter.FEASIBILITY_TOL,1e-9) # Changed this to get more accurate solutions
+    
 
     for org_id in community.organisms:
         exchange_rxns = community.organisms_exchange_reactions[org_id]
@@ -162,7 +169,7 @@ def mu_score(community, environment=None, min_mol_weight=False, min_growth=0.1, 
     return scores
 
 
-def mp_score(community, environment=None, abstol=1e-3):
+def mp_score(community, environment=None, abstol=1e-6): # originally abstol=1e-3
     """
     Discover metabolites which species can produce in community
 
@@ -193,6 +200,8 @@ def mp_score(community, environment=None, abstol=1e-3):
                 rxn.ub = 1000
 
     solver = solver_instance(community.merged)
+    solver.set_parameter(Parameter.FEASIBILITY_TOL,1e-9) # Changed this to get more accurate solutions
+    
 
     scores = {}
 
@@ -341,6 +350,8 @@ def mro_score(community, environment=None, direction=-1, min_mol_weight=False, m
     medium = {x[7:-7] for x in medium} - exclude
     individual_media = {}
     solver = solver_instance(community.merged)
+    solver.set_parameter(Parameter.FEASIBILITY_TOL,1e-9) # Changed this to get more accurate solutions
+    
 
     for org_id in community.organisms:
         biomass_reaction = community.organisms_biomass_reactions[org_id]
